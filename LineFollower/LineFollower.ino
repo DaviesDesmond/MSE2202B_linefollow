@@ -116,7 +116,7 @@ long l_Right_Motor_Position;
 bool nv_Left_Line_Tracker_isDark;    //Lines I added for our logic of what the sensors have
 bool nv_Middle_Line_Tracker_isDark;  //Note, code only checks if dark, if light its just assumed as not dark
 bool nv_Right_Line_Tracker_isDark;   //we may want to change this later, but not sure what we'd do with middle ground readings (not dark or light)
-bool nv_Line_is_Light=true;           //change based on testing conditions
+bool nv_Line_is_Light=false;           //change based on testing conditions
 
 //more variables from original code
 unsigned long ul_3_Second_timer = 0;
