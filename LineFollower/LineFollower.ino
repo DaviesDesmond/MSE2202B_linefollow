@@ -117,6 +117,12 @@ bool nv_Left_Line_Tracker_isDark;    //Lines I added for our logic of what the s
 bool nv_Middle_Line_Tracker_isDark;  //Note, code only checks if dark, if light its just assumed as not dark
 bool nv_Right_Line_Tracker_isDark;   //we may want to change this later, but not sure what we'd do with middle ground readings (not dark or light)
 bool nv_Line_is_Light=false;           //change based on testing conditions
+unsigned long nv_Left_Encoder_Start;   //used for debouncing line following
+unsigned long nv_Left_Encoder_Current;
+unsigned long nv_Right_Encoder_Start;
+unsigned long nv_Right_Encoder_Current;
+bool nv_Line_Debounce_Standby=false;   //true for first few encodor counts
+int nv_Line_Debounce_Count=5;
 
 //more variables from original code
 unsigned long ul_3_Second_timer = 0;
@@ -292,7 +298,7 @@ void loop()
         Serial.println(l_Right_Motor_Position);
 #endif
 
-       // set motor speeds
+        // set motor speeds
         ui_Left_Motor_Speed = constrain((ui_Motors_Speed + ui_Left_Motor_Offset), 1600, 2100);
         ui_Right_Motor_Speed = constrain((ui_Motors_Speed + ui_Right_Motor_Offset), 1600, 2100);
 
@@ -309,13 +315,38 @@ void loop()
 
       if((!nv_Left_Line_Tracker_isDark)&&(!nv_Middle_Line_Tracker_isDark)&&(!nv_Right_Line_Tracker_isDark))
       {
-        //all sensors light, stop
-        bt_Motors_Enabled=false;
+        //debouncing for slight off-track reading between lights
+        if(nv_Line_Debounce_Standby)
+        {
+          //just changed to this reading
+          nv_Line_Debounce_Standby=false;
+          nv_Left_Encoder_Start=encoder_LeftMotor.getRawPosition();
+          nv_Right_Encoder_Start=encoder_RightMotor.getRawPosition();
+        }
+        nv_Left_Encoder_Current=encoder_LeftMotor.getRawPosition();
+        nv_Right_Encoder_Current=encoder_RightMotor.getRawPosition();
+
+        if(((nv_Left_Encoder_Current-nv_Left_Encoder_Start)>nv_Line_Debounce_Count)||(nv_Right_Encoder_Current-nv_Right_Encoder_Start)>nv_Line_Debounce_Count)
+        {
+          //more than line_debounce_count has passed for either encoder, enter wiggle mode
+          /*if(((nv_Left_Encoder_Current+nv_Right_Encoder_Current)-(nv_Left_Encoder_Start+nv_Right_Encoder_Start))>600)
+          {
+            //all sensors ligh for awhile, it is off track
+            bt_Motors_Enabled=false;
+          }
+          else
+          {
+            //wiggle mode!
+            servo_LeftMotor.writeMicroseconds(1300);
+            servo_RightMotor.writeMicroseconds(1900);
+          }*/
+        }
       }
       else
       {
         //at least one sensor dark, motors should go adjustment to steering below
         bt_Motors_Enabled=true;
+        nv_Line_Debounce_Standby=true; //prep debounce for next reading
       }
       if(nv_Left_Line_Tracker_isDark && nv_Middle_Line_Tracker_isDark && nv_Right_Line_Tracker_isDark)
       {
@@ -357,8 +388,20 @@ void loop()
         }
       }
 
+      //check if middle light was last on, increase debounce time if thats the case
+      if(nv_Middle_Line_Tracker_isDark&&(!nv_Left_Line_Tracker_isDark)&&(!nv_Right_Line_Tracker_isDark))
+      {
+        nv_Line_Debounce_Count=50;
+        //upped debounce time if middle last on track
+      }
+      else if(nv_Left_Line_Tracker_isDark||nv_Middle_Line_Tracker_isDark||nv_Right_Line_Tracker_isDark)
+      {
+        //reset debounce count if not all off track
+        nv_Line_Debounce_Count=15;
+      }
 
-        if(bt_Motors_Enabled)
+
+        if(bt_Motors_Enabled&&nv_Line_Debounce_Standby)
         {
           if(nv_Line_is_Light)
           {
@@ -435,7 +478,8 @@ void loop()
           EEPROM.write(ci_Right_Line_Tracker_Light_Address_H, highByte(ui_Right_Line_Tracker_Light));
           ui_Robot_State_Index = 0;    // go back to Mode 0
         }
-        ui_Mode_Indicator_Index = 2; 
+        ui_Mode_Indicator_Index = 2;
+        nv_Line_is_Light=true; //sets light line if light calibrated last
       }
       break;
     }
@@ -484,6 +528,7 @@ void loop()
           ui_Robot_State_Index = 0;    // go back to Mode 0
         }
         ui_Mode_Indicator_Index = 3;
+        nv_Line_is_Light=false; //sets to dark line if dark calibrated last
       }
       break;
     }
