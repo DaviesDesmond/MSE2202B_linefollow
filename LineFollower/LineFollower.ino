@@ -107,7 +107,7 @@ unsigned long ul_Echo_Time;
 unsigned int ui_Left_Line_Tracker_Data;     //Line Tracker Data is measured input from light sensors
 unsigned int ui_Middle_Line_Tracker_Data;   //Dark is high value, light is low value
 unsigned int ui_Right_Line_Tracker_Data;
-unsigned int ui_Motors_Speed = 1650;        // Default run speed
+unsigned int ui_Motors_Speed = 1700;        // Default run speed
 unsigned int ui_Left_Motor_Speed;
 unsigned int ui_Right_Motor_Speed;
 long l_Left_Motor_Position;
@@ -121,8 +121,10 @@ unsigned long nv_Left_Encoder_Start;   //used for debouncing line following
 unsigned long nv_Left_Encoder_Current;
 unsigned long nv_Right_Encoder_Start;
 unsigned long nv_Right_Encoder_Current;
+bool nv_Line_Speed_Continue_as_is=false; //used for debouncing stuff
 bool nv_Line_Debounce_Standby=false;   //true for first few encodor counts
 int nv_Line_Debounce_Count=5;
+bool nv_Spin_Wheels_Back=false;     //used for sweeping check once off course
 int nv_Last_Line_Tracker_Index;      //1 if left was last on, 2 if only middle, 3 if right, 4 if all/reset
 
 //more variables from original code
@@ -321,6 +323,8 @@ void loop()
         {
           //just changed to this reading
           nv_Line_Debounce_Standby=false;
+          nv_Line_Speed_Continue_as_is=true;
+          nv_Spin_Wheels_Back=false;
           nv_Left_Encoder_Start=encoder_LeftMotor.getRawPosition();
           nv_Right_Encoder_Start=encoder_RightMotor.getRawPosition();
         }
@@ -329,17 +333,29 @@ void loop()
 
         if(((nv_Left_Encoder_Current-nv_Left_Encoder_Start)>nv_Line_Debounce_Count)||(nv_Right_Encoder_Current-nv_Right_Encoder_Start)>nv_Line_Debounce_Count)
         {
-          if(((nv_Left_Encoder_Current-nv_Left_Encoder_Start)<400)||(nv_Right_Encoder_Current-nv_Right_Encoder_Start)<400)
+          nv_Line_Speed_Continue_as_is=false;
+          bt_Motors_Enabled=false;
+          nv_Last_Line_Tracker_Index=4;
+          /* //THis doesn;t work at all... commenting out for now
+          if(!nv_Spin_Wheels_Back)
+          {
+            //rotate left once off track
+            ui_Left_Motor_Speed=1200+ui_Left_Motor_Offset;
+            ui_Right_Motor_Speed=1800+ui_Right_Motor_Offset;
+
+            if((nv_Right_Encoder_Current-nv_Right_Encoder_Start)>200)
             {
-              //rotate left a bit once off
-              servo_LeftMotor.writeMicroseconds(1200);
-              servo_RightMotor.writeMicroseconds(1800);
+              // has spun enough, other way
+              nv_Spin_Wheels_Back=true;
             }
-            else if(((nv_Left_Encoder_Current-nv_Left_Encoder_Start)<1100)||(nv_Right_Encoder_Current-nv_Right_Encoder_Start)<1100)
+          }
+          else
+          {
+            //check if gone back to orign, spin other way
+            if((nv_Right_Encoder_Current-nv_Right_Encoder_Start)>(-200))
             {
-              //then rotate a bit right
-              servo_LeftMotor.writeMicroseconds(1800);
-              servo_RightMotor.writeMicroseconds(1200);
+              ui_Left_Motor_Speed=1800+ui_Left_Motor_Offset;
+              ui_Right_Motor_Speed=1200+ui_Right_Motor_Offset;
             }
             else
             {
@@ -347,18 +363,21 @@ void loop()
               //all sensors ligh for awhile, it is off track
               bt_Motors_Enabled=false;
             }
+          } */
         }
       }
       else
       {
         //at least one sensor dark, motors should go adjustment to steering below
         bt_Motors_Enabled=true;
+        nv_Line_Speed_Continue_as_is=false;
         nv_Line_Debounce_Standby=true; //prep debounce for next reading
       }
       if(nv_Left_Line_Tracker_isDark && nv_Middle_Line_Tracker_isDark && nv_Right_Line_Tracker_isDark)
       {
         ui_Left_Motor_Speed = ci_Left_Motor_Stop;
         ui_Right_Motor_Speed = ci_Right_Motor_Stop;
+        nv_Last_Line_Tracker_Index=4;
       }
 
       //steers by adjusting the stated motor speeds for when it is enabled or not
@@ -367,6 +386,7 @@ void loop()
       else if(nv_Left_Line_Tracker_isDark&&(!nv_Right_Line_Tracker_isDark))
       {
         //if left dark, right light, middle affects amount of drift
+        nv_Last_Line_Tracker_Index=1;
         //is drifting to the right, cut left motor
         if(nv_Middle_Line_Tracker_isDark)
         {
@@ -382,6 +402,7 @@ void loop()
       else if((!nv_Left_Line_Tracker_isDark)&&(nv_Right_Line_Tracker_isDark))
       {
         //left is light, right is dark, affects drift
+        nv_Last_Line_Tracker_Index=3;
         //is drifting to left, cut right motor
         if(nv_Middle_Line_Tracker_isDark)
         {
@@ -398,6 +419,7 @@ void loop()
       //check if middle light was last on, increase debounce time if thats the case
       if(nv_Middle_Line_Tracker_isDark&&(!nv_Left_Line_Tracker_isDark)&&(!nv_Right_Line_Tracker_isDark))
       {
+        nv_Last_Line_Tracker_Index=2;
         nv_Line_Debounce_Count=50;
         //upped debounce time if middle last on track
       }
@@ -408,7 +430,7 @@ void loop()
       }
 
 
-        if(bt_Motors_Enabled&&nv_Line_Debounce_Standby)
+        if(bt_Motors_Enabled&&(!nv_Line_Speed_Continue_as_is))
         {
           if(nv_Line_is_Light)
           {
