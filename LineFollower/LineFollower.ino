@@ -123,6 +123,7 @@ unsigned long nv_Right_Encoder_Start;
 unsigned long nv_Right_Encoder_Current;
 bool nv_Line_Debounce_Standby=false;   //true for first few encodor counts
 int nv_Line_Debounce_Count=5;
+int nv_Last_Line_Tracker_Index;      //1 if left was last on, 2 if only middle, 3 if right, 4 if all/reset
 
 //more variables from original code
 unsigned long ul_3_Second_timer = 0;
@@ -328,18 +329,24 @@ void loop()
 
         if(((nv_Left_Encoder_Current-nv_Left_Encoder_Start)>nv_Line_Debounce_Count)||(nv_Right_Encoder_Current-nv_Right_Encoder_Start)>nv_Line_Debounce_Count)
         {
-          //more than line_debounce_count has passed for either encoder, enter wiggle mode
-          /*if(((nv_Left_Encoder_Current+nv_Right_Encoder_Current)-(nv_Left_Encoder_Start+nv_Right_Encoder_Start))>600)
-          {
-            //all sensors ligh for awhile, it is off track
-            bt_Motors_Enabled=false;
-          }
-          else
-          {
-            //wiggle mode!
-            servo_LeftMotor.writeMicroseconds(1300);
-            servo_RightMotor.writeMicroseconds(1900);
-          }*/
+          if(((nv_Left_Encoder_Current-nv_Left_Encoder_Start)<400)||(nv_Right_Encoder_Current-nv_Right_Encoder_Start)<400)
+            {
+              //rotate left a bit once off
+              servo_LeftMotor.writeMicroseconds(1200);
+              servo_RightMotor.writeMicroseconds(1800);
+            }
+            else if(((nv_Left_Encoder_Current-nv_Left_Encoder_Start)<1100)||(nv_Right_Encoder_Current-nv_Right_Encoder_Start)<1100)
+            {
+              //then rotate a bit right
+              servo_LeftMotor.writeMicroseconds(1800);
+              servo_RightMotor.writeMicroseconds(1200);
+            }
+            else
+            {
+              //give up
+              //all sensors ligh for awhile, it is off track
+              bt_Motors_Enabled=false;
+            }
         }
       }
       else
